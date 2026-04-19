@@ -40,7 +40,7 @@ def home():
 
 
 # Initialize Razorpay Client (Use your test keys here)
-razorpay_client = razorpay.Client(auth=("YOUR_RAZORPAY_KEY_ID", "YOUR_RAZORPAY_SECRET"))
+razorpay_client = razorpay.Client(auth=("rzp_test_SZ62Sbymf8U1P2", "YOUR_RAZORPAY_SECRET"))
 
 # Mock Database
 # Replace the empty users_db = {} with this:
