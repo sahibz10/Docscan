@@ -1,12 +1,13 @@
 import { useState, useRef } from "react";
+import { useEffect } from "react";
 
 const FONTS = `https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap`;
 
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0;}
-.dsa{font-family:'DM Sans',sans-serif;min-height:600px;background:#08091a;color:#e2e8f0;}
+.dsa{font-family:'DM Sans',sans-serif;min-height:100vh;background:var(--bg-main);color:var(--text-main); transition: background 0.3s; display: flex; flex-direction: column;}
 /* AUTH */
-.auth-outer{min-height:600px;display:flex;align-items:center;justify-content:center;background:#08091a;position:relative;overflow:hidden;}
+.auth-outer{min-height:100vh;flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg-main);position:relative;overflow:hidden;}
 .orb1{position:absolute;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(109,40,217,.18) 0%,transparent 70%);top:-80px;right:-60px;pointer-events:none;}
 .orb2{position:absolute;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.13) 0%,transparent 70%);bottom:-60px;left:-60px;pointer-events:none;}
 .auth-card{background:#0d1022;border:1px solid rgba(255,255,255,.09);border-radius:22px;padding:40px;width:100%;max-width:420px;position:relative;z-index:1;}
@@ -174,7 +175,6 @@ export default function App() {
   const [regD, setRegD]       = useState({name:"",email:"",password:"",confirm:""});
   const [authErr, setAuthErr] = useState("");
   const [authLoad, setAuthLoad] = useState(false);
-
   const [file, setFile]         = useState(null);
   const [imgSrc, setImgSrc]     = useState(null);
   const [extracted, setExtracted] = useState("");
@@ -183,21 +183,45 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied]     = useState(false);
   const fileRef = useRef(null);
-
   const [selPlan, setSelPlan]   = useState("pro");
   const [paying, setPaying]     = useState(false);
   const [payDone, setPayDone]   = useState(false);
   const [toast, setToast]       = useState(null);
-
+  const [theme, setTheme] = useState("dark");
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null), 3000); };
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  };
+
 
   /* ─── AUTH ─── */
   const doLogin = async e => {
     e.preventDefault(); setAuthErr("");
     if (!loginD.email || !loginD.password) return setAuthErr("Please fill in all fields.");
-    setAuthLoad(true); await delay(900);
-    setUser({name:"Alex Johnson",email:loginD.email,plan:"Pro",avatar:"AJ",used:47,total:100});
-    setScreen("app"); setAuthLoad(false);
+    setAuthLoad(true); 
+    
+    try {
+      const res = await fetch("http://localhost:8000/api/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(loginD)
+      });
+      
+      if (!res.ok) throw new Error("Invalid credentials");
+      const data = await res.json();
+      
+      setUser(data.user); // Instantly reflects DB data in the UI
+      setScreen("app");
+    } catch(err) {
+      setAuthErr("Login failed. Check your credentials.");
+    } finally {
+      setAuthLoad(false);
+    }
   };
 
   const doRegister = async e => {
@@ -225,32 +249,29 @@ export default function App() {
   const doExtract = async () => {
     if (!file) return;
     setScanning(true); setScanErr(""); setExtracted("");
+    
+    const formData = new FormData();
+    formData.append("file", file);
+
     try {
-      const b64 = await new Promise((res,rej)=>{
-        const r=new FileReader();
-        r.onload=e=>res(e.target.result.split(",")[1]);
-        r.onerror=rej; r.readAsDataURL(file);
+      // Call your local Python backend
+      const resp = await fetch("http://localhost:8000/api/extract", {
+        method: "POST",
+        body: formData,
       });
-      const resp = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",max_tokens:1000,
-          messages:[{role:"user",content:[
-            {type:"image",source:{type:"base64",media_type:file.type,data:b64}},
-            {type:"text",text:"Extract all visible text from this document or image. Return only the extracted text, preserving structure, line breaks, and formatting. If there is no readable text, respond with: 'No readable text detected in this image.'"}
-          ]}]
-        })
-      });
+      
       if (!resp.ok) throw new Error("API error");
       const data = await resp.json();
-      const txt = data.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      setExtracted(txt);
+      
+      setExtracted(data.extracted_text);
       setUser(prev=>({...prev,used:Math.min(prev.used+1,prev.total)}));
       showToast("Text extracted successfully!");
     } catch {
-      setScanErr("Extraction failed. Please check your connection and try again.");
+      setScanErr("Extraction failed. Ensure the Python backend is running.");
     } finally { setScanning(false); }
   };
+
+
 
   const doCopy = () => {
     navigator.clipboard.writeText(extracted).then(()=>{setCopied(true); setTimeout(()=>setCopied(false),2000);});
@@ -258,12 +279,55 @@ export default function App() {
 
   /* ─── PAYMENT ─── */
   const doPay = async () => {
-    setPaying(true); await delay(1600);
-    const label = selPlan.charAt(0).toUpperCase()+selPlan.slice(1);
-    setUser(prev=>({...prev,plan:label}));
-    setPaying(false); setPayDone(true);
-    showToast(`🎉 Upgraded to ${label} plan!`);
-    setTimeout(()=>{ setPayDone(false); setPage("dashboard"); }, 2200);
+    setPaying(true);
+    
+    try {
+      const planAmount = selPlan === "pro" ? 12 : 49;
+      
+      // 1. Create order on the backend
+      const orderRes = await fetch("http://localhost:8000/api/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: planAmount, email: user.email })
+      });
+      const order = await orderRes.json();
+
+      // 2. Open Razorpay Checkout Modal
+      const options = {
+        key: "YOUR_RAZORPAY_KEY_ID", // Replace with your test key
+        amount: order.amount,
+        currency: order.currency,
+        name: "DocScan AI",
+        description: `${selPlan.toUpperCase()} Plan Subscription`,
+        order_id: order.id,
+        handler: function (response) {
+          // 3. Handle Success - Update DB and State here
+          const label = selPlan.charAt(0).toUpperCase() + selPlan.slice(1);
+          setUser(prev => ({...prev, plan: label})); // Update local state immediately
+          setPayDone(true);
+          showToast(`🎉 Upgraded to ${label} plan!`);
+          setTimeout(()=>{ setPayDone(false); setPage("dashboard"); }, 2200);
+          
+          // Note: In production, send response.razorpay_payment_id to your backend to verify signature
+        },
+        prefill: {
+          name: user.name,
+          email: user.email,
+        },
+        theme: { color: "#7c3aed" }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response){
+        showToast("Payment failed or cancelled.");
+      });
+      rzp.open();
+
+    } catch (err) {
+      showToast("Failed to initiate payment.");
+    } finally {
+      setPaying(false);
+    }
   };
 
   /* ─── RENDER CONTENT ─── */
@@ -662,6 +726,12 @@ export default function App() {
             ))}
           </div>
           <div className="sb-bottom">
+              <button 
+                onClick={toggleTheme} 
+                style={{width:"100%", padding:"10px", background:"transparent", border:"1px solid var(--border-color)", borderRadius:"8px", color:"var(--text-main)", cursor:"pointer", marginBottom: "10px"}}>
+                {theme === "dark" ? "☀️ Switch to Light" : "🌙 Switch to Dark"}
+              </button>
+
             <div className="user-row">
               <div className="avatar">{user?.avatar}</div>
               <div>
