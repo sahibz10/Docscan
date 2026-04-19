@@ -23,6 +23,15 @@ except Exception as e:
 
 
 app = FastAPI()
+
+# Allow React frontend to communicate with this backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, set this to your frontend URL
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/")
 def home():
     return {"message": "Backend API is running successfully!"}
@@ -179,13 +188,6 @@ def create_order(req: PaymentRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-# Allow React frontend to communicate with this backend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Change to your React app's URL in production
-    allow_methods=["*"],
-    allow_headers=["*"],
-)#
 
 class UpgradeRequest(BaseModel):
     email: str
