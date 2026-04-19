@@ -114,9 +114,21 @@ def login(user: UserLogin):
     
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-        
-    # Check if the provided password matches the hashed password in the database
-    if not bcrypt.checkpw(user.password.encode('utf-8'), db_user["password"].encode('utf-8')):
+    
+    try:
+        # Check if the provided password matches the hashed password in the database
+        password_hash = db_user.get("password", "")
+        # Handle both bcrypt hashed and plain text passwords for backward compatibility
+        if password_hash.startswith("$2"):
+            # It's a bcrypt hash
+            if not bcrypt.checkpw(user.password.encode('utf-8'), password_hash.encode('utf-8')):
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+        else:
+            # Plain text comparison (for development/backward compatibility)
+            if user.password != password_hash:
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+    except ValueError as e:
+        # bcrypt checkpw raised an error
         raise HTTPException(status_code=401, detail="Invalid credentials")
         
     # Clean up the object before sending it back
