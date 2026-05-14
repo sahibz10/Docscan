@@ -10,9 +10,14 @@ import uuid
 from pymongo import MongoClient
 import bcrypt
 import certifi
+from dotenv import load_dotenv
+import os
 
-MONGO_URI="mongodb+srv://docscan_admin:mySecurePass123@myatlasclusteredu.veatt.mongodb.net/?retryWrites=true&w=majority"
-# mongodb+srv://<db_username>:<db_password>@myatlasclusteredu.veatt.mongodb.net/?appName=myAtlasClusterEDU
+# Load environment variables from .env file
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://docscan_admin:mySecurePass123@myatlasclusteredu.veatt.mongodb.net/?retryWrites=true&w=majority")
+
 try:
     client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
     db = client["docscan_db"]
@@ -40,7 +45,9 @@ def home():
 
 
 # Initialize Razorpay Client (Use your test keys here)
-razorpay_client = razorpay.Client(auth=("rzp_test_SZ62Sbymf8U1P2", "YOUR_RAZORPAY_SECRET"))
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_SZ62Sbymf8U1P2")
+RAZORPAY_SECRET = os.getenv("RAZORPAY_SECRET", "YOUR_RAZORPAY_SECRET")
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_SECRET))
 
 # Mock Database
 # Replace the empty users_db = {} with this:

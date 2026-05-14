@@ -180,13 +180,6 @@ const CheckIcon = ({ s = 13 }) => <svg width={s} height={s} viewBox="0 0 24 24" 
 const TrashIcon = ({ s = 13 }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
 const delay = ms => new Promise(r => setTimeout(r, ms));
 
-const SCANS = [
-  { id: 1, name: "Invoice_Q1_2026.jpg", date: "Apr 17, 2026", words: 342, type: "Invoice" },
-  { id: 2, name: "Contract_NDA_Acme.png", date: "Apr 15, 2026", words: 1205, type: "Contract" },
-  { id: 3, name: "Receipt_Hotel_NYC.jpg", date: "Apr 12, 2026", words: 87, type: "Receipt" },
-  { id: 4, name: "Medical_Report_DrLee.png", date: "Apr 10, 2026", words: 876, type: "Medical" },
-  { id: 5, name: "Passport_ID_Scan.jpg", date: "Apr 8, 2026", words: 234, type: "ID" },
-];
 
 const TYPE_CLS = { Invoice: "bb", Contract: "ba", Receipt: "bg", Medical: "bp", ID: "bc" };
 
@@ -218,6 +211,20 @@ export default function App() {
   const [payDone, setPayDone] = useState(false);
   const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState("dark");
+
+
+  const SCANS = [
+  { id: 1, name: "Invoice_Q1_2026.jpg", date: "Apr 17, 2026", words: 342, type: "Invoice" },
+  { id: 2, name: "Contract_NDA_Acme.png", date: "Apr 15, 2026", words: 1205, type: "Contract" },
+  { id: 3, name: "Receipt_Hotel_NYC.jpg", date: "Apr 12, 2026", words: 87, type: "Receipt" },
+  { id: 4, name: "Medical_Report_DrLee.png", date: "Apr 10, 2026", words: 876, type: "Medical" },
+  { id: 5, name: "Passport_ID_Scan.jpg", date: "Apr 8, 2026", words: 234, type: "ID" },
+];
+
+
+
+
+
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   useEffect(() => {
@@ -303,18 +310,33 @@ export default function App() {
     formData.append("file", file);
 
     try {
-      // Call your local Python backend
       const resp = await fetch("http://localhost:8000/api/extract", {
         method: "POST",
         body: formData,
       });
-
+      
       if (!resp.ok) throw new Error("API error");
       const data = await resp.json();
-
-      setExtracted(data.extracted_text);
-      setUser(prev => ({ ...prev, used: Math.min(prev.used + 1, prev.total) }));
+      
+      const extractedText = data.extracted_text;
+      setExtracted(extractedText);
+      setUser(prev=>({...prev,used:Math.min(prev.used+1,prev.total)}));
+      
+      // NEW CODE: Create a new scan record and add it to the top of the list
+      const wordCount = extractedText.split(/\s+/).filter(Boolean).length;
+      const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      
+      const newScan = {
+        id: Date.now(), // Generate a unique ID
+        name: file.name,
+        date: today,
+        words: wordCount,
+        type: file.name.toLowerCase().endsWith(".pdf") ? "Document" : "Image" // Basic type detection
+      };
+      
+      setScans(prev => [newScan, ...prev]); // Add to beginning of history
       showToast("Text extracted successfully!");
+      
     } catch {
       setScanErr("Extraction failed. Ensure the Python backend is running.");
     } finally { setScanning(false); }
@@ -447,9 +469,9 @@ export default function App() {
           <table className="tbl">
             <thead><tr><th>File Name</th><th>Type</th><th>Words</th><th>Date</th><th>Status</th></tr></thead>
             <tbody>
-              {SCANS.map(s => (
+              {SCANS.slice(0, 5).map(s => (
                 <tr key={s.id}>
-                  <td style={{ color: "#e2e8f0" }}>
+                  <td style={{ color:"var(--text-main)" }}>
                     <span style={{ marginRight: "7px", opacity: .5 }}><DocIcon /></span>{s.name}
                   </td>
                   <td><span className={`badge ${TYPE_CLS[s.type] || "bb"}`}>{s.type}</span></td>
@@ -560,7 +582,7 @@ export default function App() {
         </div>
         <div className="card">
           <div className="card-hdr">
-            <span className="card-title">All Documents ({SCANS.length})</span>
+            <span className="card-title">All Documents ({Scans.length})</span>
             <div style={{ display: "flex", gap: "8px" }}>
               {["Filter", "Export"].map(l => (
                 <button key={l} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.07)", borderRadius: "7px", padding: "5px 12px", color: "#475569", fontSize: "12px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>{l}</button>
@@ -570,7 +592,7 @@ export default function App() {
           <table className="tbl">
             <thead><tr><th>File Name</th><th>Type</th><th>Words Extracted</th><th>Date</th><th>Actions</th></tr></thead>
             <tbody>
-              {SCANS.map(s => (
+              {scans.map(s => (
                 <tr key={s.id}>
                   <td style={{ color: "#e2e8f0" }}><span style={{ marginRight: "7px", opacity: .4 }}><DocIcon /></span>{s.name}</td>
                   <td><span className={`badge ${TYPE_CLS[s.type] || "bb"}`}>{s.type}</span></td>
